@@ -469,10 +469,14 @@ accuracy <- df %>% group_by(group) %>% dplyr::summarise(acc_outcome=mean(correct
 
 accuracy <- accuracy[c(1,3,2),] #reordering of groups
 
-knitr::kable(accuracy) %>% kable_styling(c("striped", "bordered", full_width = F))
+knitr::kable(accuracy, caption="Accuracy based on actual and probable outcomes by group") %>%
+  kable_styling(position="left")
 ```
 
-<table class="table table-striped table-bordered" style="margin-left: auto; margin-right: auto;">
+<table class="table" style>
+<caption>
+Accuracy based on actual and probable outcomes by group
+</caption>
 <thead>
 <tr>
 <th style="text-align:left;">
