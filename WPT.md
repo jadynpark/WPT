@@ -546,7 +546,7 @@ two_cards_plot <- ggplot(two_cards, aes(x=config, y=mean_resp, fill=group)) +
   geom_dotplot(binaxis='y', stackdir='center', dotsize=.2, position=position_dodge(.9)) +
   geom_dotplot(data=two_cards_sub, aes(x=config, y=rainprob), fill="red", binaxis='y', stackdir='center', position=position_dodge(.9)) +
   theme_classic() +
-  labs(title="Responses to two card cues")
+  labs(title="Responses to trials with two cards")
 
 two_cards_plot + scale_fill_manual(values=c("#FFFF99", "#9999FF")) + 
   scale_y_continuous(name="% outcome is rain or sun", 
@@ -562,7 +562,7 @@ three_cards_plot <- ggplot(three_cards, aes(x=config, y=mean_resp, fill=group)) 
   geom_dotplot(binaxis='y', stackdir='center', dotsize=.2, position=position_dodge(.9)) +
   geom_dotplot(data=three_cards_sub, aes(x=config, y=rainprob), fill="red", binaxis='y', stackdir='center', position=position_dodge(.9)) +
   theme_classic() +
-  labs(title="Responses to three card cues")
+  labs(title="Responses to trials with three cards")
 
 three_cards_plot + scale_fill_manual(values=c("#FFFF99", "#9999FF")) + 
   scale_y_continuous(name="% outcome is rain or sun", 
@@ -605,7 +605,7 @@ unpredictive_plot <- ggplot(unpredictive, aes(x=config, y=mean_resp, fill=group)
   geom_dotplot(binaxis='y', stackdir='center', dotsize=.2, position=position_dodge(.9)) +
   geom_dotplot(data=unpredictive_sub, aes(x=config, y=rainprob), fill="red", binaxis='y', stackdir='center', position=position_dodge(.9)) +
   theme_classic() +
-  labs(title="Responses to cards less predictive cues (rain or sun prob ~50%")
+  labs(title="Responses to less predictive cues (rain or sun prob ~50%")
 
 unpredictive_plot + scale_fill_manual(values=c("#FFFF99", "#9999FF")) + 
   scale_y_continuous(name="% outcome is rain or sun", 
