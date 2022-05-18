@@ -1,4 +1,4 @@
-WPT data analysis\_prelim
+WPT data analysis_prelim
 ================
 Jadyn Park
 3/22/2022
@@ -8,7 +8,7 @@ Jadyn Park
 rm(list = ls())
 
 ## load libraries
-library(knitr); library(kableExtra); library(dplyr); library(ggplot2); library(ez); library(readr); source("~/Desktop/WPT/summarySEwithin2.R")
+library(knitr); library(kableExtra); library(dplyr); library(ggplot2); library(ez); library(readr); library(lme4)
 
 ## merge .csv files nested in folders to a master spreadsheet
   ## merge with py because pandas is superior 
@@ -31,9 +31,9 @@ library(knitr); library(kableExtra); library(dplyr); library(ggplot2); library(e
     # res.to_csv("WPT_master_CHR.csv")
 
 ## import csv files
-chr_master <- read.csv("~/Desktop/WPT/WPT_master_CHR.csv", header=T)
-hc_master <- read.csv("~/Desktop/WPT/WPT_master_HC.csv", header=T)
-ncp_master <- read.csv("~/Desktop/WPT/WPT_master_NCP.csv", header=T)
+chr_master <- read.csv("~/Desktop/ADAPT/WPT/WPT_master_CHR.csv", header=T)
+hc_master <- read.csv("~/Desktop/ADAPT/WPT/WPT_master_HC.csv", header=T)
+ncp_master <- read.csv("~/Desktop/ADAPT/WPT/WPT_master_NCP.csv", header=T)
 
 all_master <- rbind(chr_master, hc_master)
 all_master <- rbind(all_master, ncp_master)
@@ -77,6 +77,10 @@ all_master <- all_master %>% mutate(resp=ifelse(resp=="<rshift>", 0, 1))
 
 ## omit irrelevant variables
 all_master <- all_master %>% select(-prob2, -time)
+
+## add group info
+all_master <- all_master %>% mutate(group=ifelse(subnum < 3999, "CHR",
+                                         ifelse(3999 < subnum & subnum < 4999, "HC", "NCP")))
 ```
 
 *Probability Structure of the Task*. For each configuration, each card
@@ -437,247 +441,193 @@ N
 </tbody>
 </table>
 
+**1. Examine performance by optimal outcome.**
+
 Given a configuration, there’s 10%, 15%, 18%, 21%, 38%, 43%, 50%, 57%,
 62%, 79%, 82%, 85%, 90% chance of raining. In other words, some
 configurations predict rain better than others. Therefore, it’s
 important to track accuracy based on probable outcome, rather than
 actual outcome.
 
-``` r
-## omit rainprob=.50 because it's just chance
-no50 <- all_master %>% filter(config != "F" & config != "I")
-
-## add variable 'probableoutcome' that indicates probable outcome for the pattern
-## if rainprob >= .50, probable outcome = 1
-no50 <- no50 %>% mutate(probableoutcome=ifelse(rainprob >= .50, 1, 0))
-
-## add variable 'acc_prob' that indicates whether probable outcome was accurately predicted
-no50 <- no50 %>% mutate(acc_prob=ifelse(resp==probableoutcome, 1, 0))
-```
+Each dot represents mean response for each participant; the red dots
+represent the probability that the configuration predicted sun or rain
+(this probability is fixed)
 
 ``` r
-## add group status
-  ## 3XXX = CHR
-  ## 4XXX = HC
-  ## 5XXX = NCP
-df <- no50 %>% mutate(group=ifelse(subnum < 3999, "CHR",
-                                         ifelse(3999 < subnum & subnum < 4999, "HC", "NCP")))
+## summarize response by subject and config
+summary_by_sub <- all_master %>% group_by(subnum, group, config) %>%
+  dplyr::summarise(c1 = mean(c1),
+                   c2 = mean(c2),
+                   c3 = mean(c3),
+                   c4 = mean(c4),
+                   sampleprob = mean(sampleprob),
+                   rainprob = mean(rainprob),
+                   mean_rt = mean(rt),
+                   mean_resp = mean(resp),
+                   outcome = mean(outcome),
+                   accuracy = mean(correct))
 
-## average accuracy by group
-accuracy <- df %>% group_by(group) %>% dplyr::summarise(acc_outcome=mean(correct),
-                                                        acc_probable=mean(acc_prob))
+## response visualization
+  ## remove NCP for now
 
-accuracy <- accuracy[c(1,3,2),] #reordering of groups
+summary_by_sub <- summary_by_sub %>% filter(group!="NCP")
 
-knitr::kable(accuracy, caption="Accuracy based on actual and probable outcomes by group") %>%
-  kable_styling(position="left")
-```
+  ## split by high rain and high sun
 
-<table class="table" style>
-<caption>
-Accuracy based on actual and probable outcomes by group
-</caption>
-<thead>
-<tr>
-<th style="text-align:left;">
-group
-</th>
-<th style="text-align:right;">
-acc\_outcome
-</th>
-<th style="text-align:right;">
-acc\_probable
-</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td style="text-align:left;">
-CHR
-</td>
-<td style="text-align:right;">
-0.7011994
-</td>
-<td style="text-align:right;">
-0.8097514
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-NCP
-</td>
-<td style="text-align:right;">
-0.7109211
-</td>
-<td style="text-align:right;">
-0.8306583
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-HC
-</td>
-<td style="text-align:right;">
-0.7231488
-</td>
-<td style="text-align:right;">
-0.8384150
-</td>
-</tr>
-</tbody>
-</table>
+high_rain <- summary_by_sub %>% filter(rainprob >.51 | config=="F")
+high_sun <- summary_by_sub %>% filter(rainprob < .49 | config=="I")
+single_sub <- high_rain %>% filter(subnum=="3001")
+single_sub_sun <- high_sun %>% filter(subnum=="3001")
 
-``` r
-## create dataframe summarized by subject
-bysubject <- df %>% group_by(group, subnum) %>% dplyr::summarise(acc_outcome=mean(correct),
-                                                        acc_probable=mean(acc_prob))
-
-## group differences significance testing
-  ## CHR vs. HC
-chr_vs_hc <- bysubject %>% filter(group != "NCP")
-t.test(chr_vs_hc$acc_outcome~chr_vs_hc$group, var.equal=T)
-```
-
-    ## 
-    ##  Two Sample t-test
-    ## 
-    ## data:  chr_vs_hc$acc_outcome by chr_vs_hc$group
-    ## t = -1.504, df = 63, p-value = 0.1376
-    ## alternative hypothesis: true difference in means is not equal to 0
-    ## 95 percent confidence interval:
-    ##  -0.051132933  0.007217429
-    ## sample estimates:
-    ## mean in group CHR  mean in group HC 
-    ##         0.6994794         0.7214372
-
-``` r
-t.test(chr_vs_hc$acc_probable~chr_vs_hc$group, var.equal=T)
-```
-
-    ## 
-    ##  Two Sample t-test
-    ## 
-    ## data:  chr_vs_hc$acc_probable by chr_vs_hc$group
-    ## t = -1.0808, df = 63, p-value = 0.2839
-    ## alternative hypothesis: true difference in means is not equal to 0
-    ## 95 percent confidence interval:
-    ##  -0.08035482  0.02394433
-    ## sample estimates:
-    ## mean in group CHR  mean in group HC 
-    ##         0.8071263         0.8353315
-
-``` r
-  ## CHR vs. NCP
-chr_vs_ncp <- bysubject %>% filter(group != "HC")
-t.test(chr_vs_ncp$acc_outcome~chr_vs_ncp$group, var.equal=T)
-```
-
-    ## 
-    ##  Two Sample t-test
-    ## 
-    ## data:  chr_vs_ncp$acc_outcome by chr_vs_ncp$group
-    ## t = -0.83348, df = 89, p-value = 0.4068
-    ## alternative hypothesis: true difference in means is not equal to 0
-    ## 95 percent confidence interval:
-    ##  -0.03806719  0.01556850
-    ## sample estimates:
-    ## mean in group CHR mean in group NCP 
-    ##         0.6994794         0.7107288
-
-``` r
-t.test(chr_vs_ncp$acc_probable~chr_vs_ncp$group, var.equal=T)
-```
-
-    ## 
-    ##  Two Sample t-test
-    ## 
-    ## data:  chr_vs_ncp$acc_probable by chr_vs_ncp$group
-    ## t = -1.0352, df = 89, p-value = 0.3034
-    ## alternative hypothesis: true difference in means is not equal to 0
-    ## 95 percent confidence interval:
-    ##  -0.06838342  0.02153493
-    ## sample estimates:
-    ## mean in group CHR mean in group NCP 
-    ##         0.8071263         0.8305505
-
-``` r
-  ## NCP vs. HC
-ncp_vs_hc <- bysubject %>% filter(group != "CHR")
-t.test(ncp_vs_hc$acc_outcome~ncp_vs_hc$group, var.equal=T)
-```
-
-    ## 
-    ##  Two Sample t-test
-    ## 
-    ## data:  ncp_vs_hc$acc_outcome by ncp_vs_hc$group
-    ## t = 0.73178, df = 82, p-value = 0.4664
-    ## alternative hypothesis: true difference in means is not equal to 0
-    ## 95 percent confidence interval:
-    ##  -0.01840186  0.03981868
-    ## sample estimates:
-    ##  mean in group HC mean in group NCP 
-    ##         0.7214372         0.7107288
-
-``` r
-t.test(ncp_vs_hc$acc_probable~ncp_vs_hc$group, var.equal=T)
-```
-
-    ## 
-    ##  Two Sample t-test
-    ## 
-    ## data:  ncp_vs_hc$acc_probable by ncp_vs_hc$group
-    ## t = 0.21126, df = 82, p-value = 0.8332
-    ## alternative hypothesis: true difference in means is not equal to 0
-    ## 95 percent confidence interval:
-    ##  -0.04023941  0.04980141
-    ## sample estimates:
-    ##  mean in group HC mean in group NCP 
-    ##         0.8353315         0.8305505
-
-``` r
-## relevel so that the plot is presented in the order of CHR > NCP > HC
-bysubject$group <- factor(bysubject$group, levels=c("HC", "NCP", "CHR"))
-
-## plot group differences
-outcome_plot <- 
-  bysubject %>% 
-  ggplot(aes(x = group, y = acc_outcome, fill = group)) + 
-  geom_flat_violin(position = position_nudge(x = .2, y = 0),
-                   alpha = .8) +
-  geom_point(aes(shape = group),
-             position = position_jitter(width = .05),
-             size = 2, alpha = 0.8) +
-  geom_boxplot(width = .1, outlier.shape = NA, alpha = 0.5) +
-  coord_flip() +
-  labs(title = "Weather prediction accuracy based on actual outcome",
-       y = "Prediction accuracy") +
+high_rain_plot <- ggplot(high_rain, aes(x=config, y=mean_resp, fill=group)) +
+  geom_boxplot(trim=FALSE, position=position_dodge(.9)) + 
+  geom_dotplot(binaxis='y', stackdir='center', dotsize=.2, position=position_dodge(.9)) +
+  geom_dotplot(data=single_sub, aes(x=config, y=rainprob), fill="red", binaxis='y', stackdir='center', position=position_dodge(.9)) +
   theme_classic() +
-  scale_fill_manual(values=c("#FA8072", "#F0E68C", "#7B68EE")) +
-  guides(fill = guide_legend(reverse=TRUE), shape = FALSE) +
-  raincloud_theme
-outcome_plot
+  labs(title="Responses to cards more predictive of rain than sun by group")
+
+high_rain_plot + scale_fill_manual(values=c("#FFFF99", "#9999FF")) + 
+  scale_y_continuous(name="% outcome is rain or sun", 
+                   breaks=c(0, .5, 1), 
+                   labels=c("100% sun", "50% rain or sun", "100% rain"))
 ```
 
-![](WPT_files/figure-gfm/groupcomparision-1.png)<!-- -->
+![](WPT_files/figure-gfm/datavis-1.png)<!-- -->
 
 ``` r
-probable_plot <- 
-  bysubject %>% 
-  ggplot(aes(x = group, y = acc_probable, fill = group)) + 
-  geom_flat_violin(position = position_nudge(x = .2, y = 0),
-                   alpha = .8) +
-  geom_point(aes(shape = group),
-             position = position_jitter(width = .05),
-             size = 2, alpha = 0.8) +
-  geom_boxplot(width = .1, outlier.shape = NA, alpha = 0.5) +
-  coord_flip() +
-  labs(title = "Weather prediction accuracy based on probable outcome",
-       y = "Prediction accuracy") +
+high_sun_plot <- ggplot(high_sun, aes(x=config, y=mean_resp, fill=group)) +
+  geom_boxplot(trim=FALSE, position=position_dodge(.9)) + 
+  geom_dotplot(binaxis='y', stackdir='center', dotsize=.2, position=position_dodge(.9)) +
+  geom_dotplot(data=single_sub_sun, aes(x=config, y=rainprob), fill="red", binaxis='y', stackdir='center', position=position_dodge(.9)) +
   theme_classic() +
-  scale_fill_manual(values=c("#FA8072", "#F0E68C", "#7B68EE")) +
-  guides(fill = guide_legend(reverse=TRUE), shape = FALSE) +
-  raincloud_theme
-probable_plot
+  labs(title="Responses to cards more predictive of sun than rain by group")
+
+high_sun_plot + scale_fill_manual(values=c("#FFFF99", "#9999FF")) + 
+  scale_y_continuous(name="% outcome is rain or sun", 
+                   breaks=c(0, .5, 1), 
+                   labels=c("100% sun", "50% rain or sun", "100% rain"))
 ```
 
-![](WPT_files/figure-gfm/groupcomparision-2.png)<!-- -->
+![](WPT_files/figure-gfm/datavis-2.png)<!-- -->
+
+``` r
+  ## split by cue types (single card, 2 cards, 3 cards)
+
+ABDH <- c("A", "B", "D", "H")
+CEFIJL <- c("C", "E", "F", "I", "J", "L")
+GKMN <- c("G", "K", "M", "N")
+
+one_card <- summary_by_sub %>% dplyr::filter(config %in% ABDH)
+two_cards <- summary_by_sub %>% dplyr::filter(config %in% CEFIJL)
+three_cards <- summary_by_sub %>% dplyr::filter(config %in% GKMN)
+
+one_card_sub <- one_card %>% filter(subnum=="3001")
+two_cards_sub <- two_cards %>% filter(subnum=="3001")
+three_cards_sub <- three_cards %>% filter(subnum=="3001")
+
+one_card_plot <- ggplot(one_card, aes(x=config, y=mean_resp, fill=group)) +
+  geom_boxplot(trim=FALSE, position=position_dodge(.9)) + 
+  geom_dotplot(binaxis='y', stackdir='center', dotsize=.2, position=position_dodge(.9)) +
+  geom_dotplot(data=one_card_sub, aes(x=config, y=rainprob), fill="red", binaxis='y', stackdir='center', position=position_dodge(.9)) +
+  theme_classic() +
+  labs(title="Responses to single card cues")
+
+one_card_plot + scale_fill_manual(values=c("#FFFF99", "#9999FF")) + 
+  scale_y_continuous(name="% outcome is rain or sun", 
+                   breaks=c(0, .5, 1), 
+                   labels=c("100% sun", "50% rain or sun", "100% rain"))
+```
+
+![](WPT_files/figure-gfm/datavis-3.png)<!-- -->
+
+``` r
+two_cards_plot <- ggplot(two_cards, aes(x=config, y=mean_resp, fill=group)) +
+  geom_boxplot(trim=FALSE, position=position_dodge(.9)) + 
+  geom_dotplot(binaxis='y', stackdir='center', dotsize=.2, position=position_dodge(.9)) +
+  geom_dotplot(data=two_cards_sub, aes(x=config, y=rainprob), fill="red", binaxis='y', stackdir='center', position=position_dodge(.9)) +
+  theme_classic() +
+  labs(title="Responses to two card cues")
+
+two_cards_plot + scale_fill_manual(values=c("#FFFF99", "#9999FF")) + 
+  scale_y_continuous(name="% outcome is rain or sun", 
+                   breaks=c(0, .5, 1), 
+                   labels=c("100% sun", "50% rain or sun", "100% rain"))
+```
+
+![](WPT_files/figure-gfm/datavis-4.png)<!-- -->
+
+``` r
+three_cards_plot <- ggplot(three_cards, aes(x=config, y=mean_resp, fill=group)) +
+  geom_boxplot(trim=FALSE, position=position_dodge(.9)) + 
+  geom_dotplot(binaxis='y', stackdir='center', dotsize=.2, position=position_dodge(.9)) +
+  geom_dotplot(data=three_cards_sub, aes(x=config, y=rainprob), fill="red", binaxis='y', stackdir='center', position=position_dodge(.9)) +
+  theme_classic() +
+  labs(title="Responses to three card cues")
+
+three_cards_plot + scale_fill_manual(values=c("#FFFF99", "#9999FF")) + 
+  scale_y_continuous(name="% outcome is rain or sun", 
+                   breaks=c(0, .5, 1), 
+                   labels=c("100% sun", "50% rain or sun", "100% rain"))
+```
+
+![](WPT_files/figure-gfm/datavis-5.png)<!-- -->
+
+``` r
+  ## split by predictability (highly predictive cards vs. difficult to predict cards)
+
+ACFHLJ <- c("A", "C", "F", "H", "L", "J")
+FIKH <- c("F", "I", "K", "H")
+
+highly_predictive <- summary_by_sub %>% dplyr::filter(config %in% ACFHLJ)
+unpredictive <- summary_by_sub %>% dplyr::filter(config %in% FIKH)
+
+highly_predictive_sub <- highly_predictive %>% filter(subnum=="3001")
+unpredictive_sub <- unpredictive %>% filter(subnum=="3001")
+
+highly_predictive_plot <- ggplot(highly_predictive, aes(x=config, y=mean_resp, fill=group)) +
+  geom_boxplot(trim=FALSE, position=position_dodge(.9)) + 
+  geom_dotplot(binaxis='y', stackdir='center', dotsize=.2, position=position_dodge(.9)) +
+  geom_dotplot(data=highly_predictive_sub, aes(x=config, y=rainprob), fill="red", binaxis='y', stackdir='center', position=position_dodge(.9)) +
+  theme_classic() +
+  labs(title="Responses to highly predictive cues (rain or sun prob > 85%)")
+
+highly_predictive_plot + scale_fill_manual(values=c("#FFFF99", "#9999FF")) + 
+  scale_y_continuous(name="% outcome is rain or sun", 
+                   breaks=c(0, .5, 1), 
+                   labels=c("100% sun", "50% rain or sun", "100% rain"))
+```
+
+![](WPT_files/figure-gfm/datavis-6.png)<!-- -->
+
+``` r
+unpredictive_plot <- ggplot(unpredictive, aes(x=config, y=mean_resp, fill=group)) +
+  geom_boxplot(trim=FALSE, position=position_dodge(.9)) + 
+  geom_dotplot(binaxis='y', stackdir='center', dotsize=.2, position=position_dodge(.9)) +
+  geom_dotplot(data=unpredictive_sub, aes(x=config, y=rainprob), fill="red", binaxis='y', stackdir='center', position=position_dodge(.9)) +
+  theme_classic() +
+  labs(title="Responses to cards less predictive cues (rain or sun prob ~50%")
+
+unpredictive_plot + scale_fill_manual(values=c("#FFFF99", "#9999FF")) + 
+  scale_y_continuous(name="% outcome is rain or sun", 
+                   breaks=c(0, .5, 1), 
+                   labels=c("100% sun", "50% rain or sun", "100% rain"))
+```
+
+![](WPT_files/figure-gfm/datavis-7.png)<!-- -->
+
+**2. Examine performance by learning.**
+
+Performance using multi-level modeling
+
+``` r
+## Accuracy by task quartile
+## stats
+# model1 <- lmer(acc_outcome~1+(1|group), data=summary_by_sub)
+# summary(model1)
+```
+
+**3. Examine performance by strategy.**
+
+There are three main strategies (Gluck et al., 2001): singleton (relying
+on a single card), one-cue (relyong on presence or absence of highly
+predictive cards), multi-cue (relying on combination of multiple cards)
