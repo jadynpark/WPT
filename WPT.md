@@ -620,10 +620,7 @@ unpredictive_plot + scale_fill_manual(values=c("#FFFF99", "#9999FF")) +
 Performance using multi-level modeling
 
 ``` r
-## Accuracy by task quartile
-## stats
-# model1 <- lmer(acc_outcome~1+(1|group), data=summary_by_sub)
-# summary(model1)
+## Add block info (Block 1: trials 1-50, Block 2: trials 51-100, Block 3: trials 101-150, Block 4: trials 151-200, Block 5: 201-250, Block 6: 251-300, Block 7: 301-350)
 ```
 
 **3. Examine performance by strategy.**
