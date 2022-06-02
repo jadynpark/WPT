@@ -621,7 +621,123 @@ Performance using multi-level modeling
 
 ``` r
 ## Add block info (Block 1: trials 1-50, Block 2: trials 51-100, Block 3: trials 101-150, Block 4: trials 151-200, Block 5: 201-250, Block 6: 251-300, Block 7: 301-350)
+all_master$block <- ifelse(all_master$trial < 51, "block1", 
+                           ifelse(all_master$trial > 50 & all_master$trial < 101, "block2",
+                                  ifelse(all_master$trial > 100 & all_master$trial < 151, "block3", 
+                                         ifelse(all_master$trial > 150 & all_master$trial < 201, "block4",
+                                         ifelse(all_master$trial > 200 & all_master$trial < 251, "block5",
+                                                ifelse(all_master$trial > 250 & all_master$trial < 301, "block6",
+                                                       ifelse(all_master$trial > 300 & all_master$trial < 351, "block7", NA)))))))
+
+summary_by_trial <- all_master %>% group_by(subnum, group, trial, block) %>%
+  dplyr::summarise(c1 = mean(c1),
+                   c2 = mean(c2),
+                   c3 = mean(c3),
+                   c4 = mean(c4),
+                   sampleprob = mean(sampleprob),
+                   rainprob = mean(rainprob),
+                   mean_rt = mean(rt),
+                   mean_resp = mean(resp),
+                   outcome = mean(outcome),
+                   accuracy = mean(correct))
+
+summary_by_block <- all_master %>% group_by(subnum, group, block) %>%
+  dplyr::summarise(c1 = mean(c1),
+                   c2 = mean(c2),
+                   c3 = mean(c3),
+                   c4 = mean(c4),
+                   sampleprob = mean(sampleprob),
+                   rainprob = mean(rainprob),
+                   mean_rt = mean(rt),
+                   mean_resp = mean(resp),
+                   outcome = mean(outcome),
+                   accuracy = mean(correct))
+
+summary_by_block_and_group <- all_master %>% group_by(group, block) %>%
+  dplyr::summarise(c1 = mean(c1),
+                   c2 = mean(c2),
+                   c3 = mean(c3),
+                   c4 = mean(c4),
+                   sampleprob = mean(sampleprob),
+                   rainprob = mean(rainprob),
+                   mean_rt = mean(rt),
+                   mean_resp = mean(resp),
+                   outcome = mean(outcome),
+                   accuracy = mean(correct))
+
+summary_by_block_and_group <- summary_by_block_and_group %>% filter(group!="NCP")
+
+## accuracy by block
+block_fig <- ggplot(summary_by_block_and_group, aes(x=block, y=accuracy, group=group)) +
+  geom_line(aes(color=group)) + 
+  theme_classic() + 
+  labs(title="Accuracy (learning rate?) by Group") +
+  scale_color_manual(values=c("#E69F00", "#9999FF")) + 
+  scale_y_continuous(name="% correct responses (out of 50 trials/block)")
+block_fig
 ```
+
+![](WPT_files/figure-gfm/mlm-1.png)<!-- -->
+
+``` r
+## accuracy t-test
+t.test(summary_by_block_and_group$accuracy[summary_by_block_and_group$group=="CHR"], summary_by_block_and_group$accuracy[summary_by_block_and_group$group=="HC"], alternative = c("two.sided", "less", "greater"), mu = 0, paired = FALSE, var.equal = FALSE)
+```
+
+    ## 
+    ##  Welch Two Sample t-test
+    ## 
+    ## data:  summary_by_block_and_group$accuracy[summary_by_block_and_group$group == "CHR"] and summary_by_block_and_group$accuracy[summary_by_block_and_group$group == "HC"]
+    ## t = -2.0053, df = 9.7714, p-value = 0.07341
+    ## alternative hypothesis: true difference in means is not equal to 0
+    ## 95 percent confidence interval:
+    ##  -0.038103089  0.002066195
+    ## sample estimates:
+    ## mean of x mean of y 
+    ## 0.6794101 0.6974286
+
+``` r
+## CHR accuracy
+
+summary <- all_master %>% group_by(subnum, group, block) %>%
+  dplyr::summarise(c1 = mean(c1),
+                   c2 = mean(c2),
+                   c3 = mean(c3),
+                   c4 = mean(c4),
+                   sampleprob = mean(sampleprob),
+                   rainprob = mean(rainprob),
+                   mean_rt = mean(rt),
+                   mean_resp = mean(resp),
+                   outcome = mean(outcome),
+                   accuracy = mean(correct))
+
+summary_chr <- summary %>% filter(group=="CHR")
+summary_by_block_chr <- summary_by_block_and_group %>% filter(group=="CHR")
+
+chr_block_fig <- ggplot(summary_chr, aes(x=block, y=accuracy, group=subnum)) +
+  geom_line(color="#FFFF99") + 
+  theme_classic() + 
+  labs(title="CHR accuracy (learning rate?) across blocks") +
+  scale_y_continuous(name="% correct responses (out of 50 trials/block)")
+
+chr_block_fig
+```
+
+![](WPT_files/figure-gfm/mlm-2.png)<!-- -->
+
+``` r
+summary_hc <- summary %>% filter(group=="HC")
+
+hc_block_fig <- ggplot(summary_chr, aes(x=block, y=accuracy, group=subnum)) +
+  geom_line(color="#9999FF") + 
+  theme_classic() + 
+  labs(title="HC accuracy (learning rate?) across blocks") +
+  scale_y_continuous(name="% correct responses (out of 50 trials/block)")
+
+hc_block_fig
+```
+
+![](WPT_files/figure-gfm/mlm-3.png)<!-- -->
 
 **3. Examine performance by strategy.**
 
